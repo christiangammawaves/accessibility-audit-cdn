@@ -1,7 +1,7 @@
-// a11y-audit-bundle.js — CDN bundle v12.6.1
-// Built: 2026-03-31T00:37:49Z
+// a11y-audit-bundle.js — CDN bundle v13.0.0
+// Built: 2026-03-31T14:46:21Z
 // Files: 71 (5 core + audit-bundle + 62 components + _audit-utils + orchestrator + exceptions)
-// https://cdn.jsdelivr.net/gh/{org}/accessibility-audit-unified@v12.6.1/dist/a11y-audit-bundle.min.js
+// https://cdn.jsdelivr.net/gh/{org}/accessibility-audit-unified@v13.0.0/dist/a11y-audit-bundle.min.js
 
 // --- version.js ---
 /**
@@ -12,38 +12,28 @@
  * Inject this FIRST before any other audit scripts.
  * 
  * @module version
- * @version 12.6.1
+ * @version 13.0.0
  */
 
 (function(global) {
   'use strict';
 
   const VERSION_INFO = {
-    version: '12.6.1',
-    releaseDate: '2026-03-30',
+    version: '13.0.0',
+    releaseDate: '2026-03-31',
 
     // Changelog for current version
     changes: [
+      'BREAKING: CDN bundle migration — bundle now served from dedicated accessibility-audit-cdn repo via jsDelivr',
+    ],
+
+    // Previous version changes (12.6.1)
+    previousChanges: [
       'FIX: Third-party exceptions ge-027/ge-028/ge-031 — move selectors from pattern.match.selectors to pattern.selectors/selectorPatterns (enables selector constraint validation and full-match scoring)',
       'FIX: normalizeSelector() — normalize all :nth-child(N), :nth-of-type(N), :nth-last-child(N), :nth-last-of-type(N) to wildcards for proper dedup grouping across repeated components',
       'FIX: deduplicateIssues() — collapsed duplicates now track instanceCount and affectedSelectors array',
       'NEW: getDetectedComponents() API on audit instance — returns cached detection results or runs detection if not yet cached',
       'DOC: SKILL.md — document return shapes for runKeyboardAudit() and auditWCAG22()',
-    ],
-
-    // Previous version changes (12.6.0)
-    previousChanges: [
-      'FIX: Exception matching — split ge-001 into ge-001a (interactive, 4.1.2) and ge-001b (images, 1.1.1) with selector constraints',
-      'FIX: Selector validation in checkExceptionMatch() — exceptions with selectors field only match intended element types',
-      'FIX: Graduated exception penalty — full match -25, partial (no selectors) -10, informational -10',
-      'FIX: Detection selectors for variant-selectors, pdp, motion-animation now match audit CONFIG.scope',
-      'FIX: page-structure.js image scan skips elements inside detected component containers (hero, product-grid, pdp, carousels)',
-      'FIX: Duplicate findings — secondary dedup key by tag+class, new groupIdenticalIssues() consolidates repeated findings',
-      'PERF: Confidence scoring — base confidence raised for touch-target-size (45→55), motion-animation (45→55), focus-not-visible (60→65)',
-      'PERF: Penalty cap reduced from 80% to 60% of base confidence (minimum 40% preserved)',
-      'PERF: Cache TTLs extended (query: 2s→10s, visibility: 5s→10s), max sizes increased (visibility: 500→2000, query: 500→1000)',
-      'PERF: Selector-based secondary visibility cache for cross-module cache hits',
-      'PERF: Contrast snapshot uses cached getComputedStyle to avoid layout thrashing',
     ],
 
     // Core script versions (all synced to main version via A11Y_VERSION)

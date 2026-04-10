@@ -1,7 +1,7 @@
-// a11y-audit-bundle.js — CDN bundle v13.0.0
-// Built: 2026-03-31T14:46:21Z
+// a11y-audit-bundle.js — CDN bundle v13.1.0
+// Built: 2026-04-10T21:44:55Z
 // Files: 71 (5 core + audit-bundle + 62 components + _audit-utils + orchestrator + exceptions)
-// https://cdn.jsdelivr.net/gh/{org}/accessibility-audit-unified@v13.0.0/dist/a11y-audit-bundle.min.js
+// https://cdn.jsdelivr.net/gh/{org}/accessibility-audit-unified@v13.1.0/dist/a11y-audit-bundle.min.js
 
 // --- version.js ---
 /**
@@ -12,28 +12,27 @@
  * Inject this FIRST before any other audit scripts.
  * 
  * @module version
- * @version 13.0.0
+ * @version 13.1.0
  */
 
 (function(global) {
   'use strict';
 
   const VERSION_INFO = {
-    version: '13.0.0',
-    releaseDate: '2026-03-31',
+    version: '13.1.0',
+    releaseDate: '2026-04-10',
 
     // Changelog for current version
     changes: [
-      'BREAKING: CDN bundle migration — bundle now served from dedicated accessibility-audit-cdn repo via jsDelivr',
+      'DOC: Add Phase 2.5 — Independent Code Review for source-available audits',
+      'DOC: Add Phase 5.75 — Post-Audit Enrichment (mandatory) for element_html, layer, confidence, component_type',
+      'DOC: Define Audit Depth Tiers (Quick/Standard/Full) with mandatory minimums',
+      'DOC: Update Dashboard Integration with real Edge Function endpoint and enriched payload mapping',
     ],
 
-    // Previous version changes (12.6.1)
+    // Previous version changes (13.0.1)
     previousChanges: [
-      'FIX: Third-party exceptions ge-027/ge-028/ge-031 — move selectors from pattern.match.selectors to pattern.selectors/selectorPatterns (enables selector constraint validation and full-match scoring)',
-      'FIX: normalizeSelector() — normalize all :nth-child(N), :nth-of-type(N), :nth-last-child(N), :nth-last-of-type(N) to wildcards for proper dedup grouping across repeated components',
-      'FIX: deduplicateIssues() — collapsed duplicates now track instanceCount and affectedSelectors array',
-      'NEW: getDetectedComponents() API on audit instance — returns cached detection results or runs detection if not yet cached',
-      'DOC: SKILL.md — document return shapes for runKeyboardAudit() and auditWCAG22()',
+      'DOC: Add dashboard integration section to SKILL.md — field mapping for fix → remediation and full AuditPayload structure',
     ],
 
     // Core script versions (all synced to main version via A11Y_VERSION)
@@ -2665,7 +2664,7 @@
         return checkAuditRuleMatch(element, pattern);
 
       case 'library-not-present':
-        return checkLibraryNotPresentMatch(element, pattern);
+        return checkLibraryNotPresentMatch(element, pattern, issue);
 
       case 'css-rule-override':
         return checkCssRuleOverrideMatch(pattern);
@@ -3062,17 +3061,34 @@
 
   /**
    * Check library-not-present pattern
-   * Suppresses findings attributed to a JS library not present in the DOM
+   * Suppresses findings attributed to a JS library not present in the DOM.
+   * Only matches findings whose selector or message references the library.
    */
-  function checkLibraryNotPresentMatch(element, pattern) {
+  function checkLibraryNotPresentMatch(element, pattern, issue) {
     if (!pattern.selectorPatterns || !Array.isArray(pattern.selectorPatterns)) return false;
-    // Check if ANY library selectors exist in the page
-    const libraryPresent = pattern.selectorPatterns.some(sel => {
-      try { return !!document.querySelector(sel); } catch { return false; }
+
+    // Only match findings whose selector or message references this library
+    var findingSelector = (issue && issue.selector || '').toLowerCase();
+    var findingMessage = (issue && issue.message || '').toLowerCase();
+    var libraryNames = pattern.libraries || [];
+    var isRelated = libraryNames.some(function(lib) {
+      var lower = lib.toLowerCase();
+      return findingSelector.indexOf(lower) !== -1 || findingMessage.indexOf(lower) !== -1;
     });
-    // If library is NOT present, suppress all findings targeting its selectors
+    if (!isRelated && element) {
+      isRelated = pattern.selectorPatterns.some(function(sel) {
+        try { return element.matches(sel); } catch(e) { return false; }
+      });
+    }
+    if (!isRelated) return false;
+
+    // Check if ANY library selectors exist in the page
+    var libraryPresent = pattern.selectorPatterns.some(function(sel) {
+      try { return !!document.querySelector(sel); } catch(e) { return false; }
+    });
+    // If library IS present, this exception doesn't apply
     if (libraryPresent) return false;
-    // The library isn't in the DOM — this is a false positive
+    // The library isn't in the DOM and the finding targets it — false positive
     return true;
   }
 
@@ -5575,7 +5591,23 @@
       console.warn('[snapshot-analyzer] Skipping merge due to snapshot error');
       return auditResults;
     }
-    
+
+    // Normalize: accept getResultsSafe() wrapper shape { success, data: { issues }, meta }
+    if (auditResults.data && auditResults.data.issues) {
+      var issues = auditResults.data.issues;
+      auditResults = {
+        issues: issues,
+        summary: auditResults.data.statistics || {
+          total: issues.length,
+          critical: issues.filter(function(i) { return i.severity === 'critical'; }).length,
+          serious: issues.filter(function(i) { return i.severity === 'serious'; }).length,
+          moderate: issues.filter(function(i) { return i.severity === 'moderate'; }).length,
+          minor: issues.filter(function(i) { return i.severity === 'minor'; }).length
+        },
+        meta: auditResults.meta || {}
+      };
+    }
+
     const merged = JSON.parse(JSON.stringify(auditResults)); // Deep clone
     
     // Track existing issues by WCAG criterion + rough selector matching
@@ -25850,7 +25882,7 @@ if (typeof window !== 'undefined') {
 // --- page-structure.js ---
 /**
  * Page Structure Accessibility Audit
- * WCAG: 1.1.1, 1.3.1, 1.3.4, 1.4.4, 2.2.1, 2.2.2, 2.4.1, 2.4.2, 2.4.6, 3.1.1, 4.1.1, 4.1.2
+ * WCAG: 1.1.1, 1.3.1, 1.3.4, 1.4.4, 2.2.1, 2.2.2, 2.4.1, 2.4.2, 2.4.6, 3.1.1, 4.1.2
  */
 
 function runPageStructureAudit() {
@@ -26756,7 +26788,7 @@ function runPageStructureAudit() {
   }
 
   function testParsing() {
-    // WCAG 4.1.1: Parsing - HTML should be well-formed
+    // WCAG 4.1.2: Duplicate IDs cause AT issues (4.1.1 deprecated in WCAG 2.2)
     const issues = [];
 
     // Check for duplicate IDs
@@ -26781,8 +26813,8 @@ function runPageStructureAudit() {
         results.stats.elementsScanned++;
         addIssue(
           'moderate',
-          '4.1.1',
-          'Parsing',
+          '4.1.2',
+          'Name, Role, Value',
           'Element has empty id attribute',
           element,
           'Remove the empty id or provide a meaningful unique ID',
@@ -26824,11 +26856,10 @@ function runPageStructureAudit() {
         results.stats.elementsScanned += allIds[id].length;
         addIssue(
           severity,
-          '4.1.1',
-          'Parsing',
+          '4.1.2',
+          'Name, Role, Value',
           'Duplicate ID "' + id + '" found ' + allIds[id].length + ' times on the page'
-            + (severity === 'critical' ? ' — referenced by ARIA or form attributes' : '')
-            + ' (Note: WCAG 4.1.1 deprecated in 2.2 but duplicate IDs still cause AT issues via 4.1.2)',
+            + (severity === 'critical' ? ' — referenced by ARIA or form attributes' : ''),
           allIds[id][0],
           'Ensure all IDs are unique on the page',
           'Duplicate IDs can cause issues with assistive technologies and JavaScript'
@@ -26845,8 +26876,8 @@ function runPageStructureAudit() {
         results.stats.elementsScanned++;
         addIssue(
           'moderate',
-          '4.1.1',
-          'Parsing',
+          '4.1.2',
+          'Name, Role, Value',
           'Form element has id="' + badId + '" which shadows HTMLFormElement property',
           el,
           'Rename the element to avoid conflicting with built-in form properties',
@@ -26874,13 +26905,13 @@ function runPageStructureAudit() {
     });
     
     if (parsingIssues.length > 0) {
-      addManualCheck('4.1.1', 'Verify HTML parsing - potential unclosed tags detected',
+      addManualCheck('4.1.2', 'Verify HTML parsing - potential unclosed tags detected',
         'Tags with mismatched counts: ' + parsingIssues.join(', ') + '. Validate HTML to ensure proper nesting.',
         'html');
     }
     
     if (issues.length === 0 && parsingIssues.length === 0) {
-      addPassed('4.1.1', 'Parsing', 'No duplicate IDs or obvious parsing errors detected', 'html');
+      addPassed('4.1.2', 'Name, Role, Value', 'No duplicate IDs or obvious parsing errors detected', 'html');
     }
   }
 

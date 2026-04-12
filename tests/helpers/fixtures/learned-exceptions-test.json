@@ -1,0 +1,38 @@
+{
+  "schemaVersion": "1.1.0",
+  "lastUpdated": "2026-01-01T00:00:00Z",
+  "description": "Test exceptions for unit tests",
+  "global": [
+    {
+      "id": "ge-001",
+      "wcag": "4.1.2",
+      "pattern": {
+        "type": "element-context",
+        "description": "Test exception for hamburger menus",
+        "checks": [
+          {
+            "attribute": "aria-expanded",
+            "condition": "exists"
+          }
+        ]
+      },
+      "reason": "Hamburger menus add aria-expanded on click",
+      "confidence": 90,
+      "verifiedCount": 5,
+      "lastVerified": "2026-01-01T00:00:00Z"
+    },
+    {
+      "id": "ge-002",
+      "wcag": "*",
+      "pattern": {
+        "type": "third-party",
+        "description": "Third-party widget exception"
+      },
+      "reason": "Third-party widgets cannot be controlled",
+      "confidence": 85,
+      "verifiedCount": 10,
+      "lastVerified": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "siteSpecific": {}
+}

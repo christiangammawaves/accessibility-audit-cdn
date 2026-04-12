@@ -819,13 +819,12 @@
       log(`Contrast snapshot failed (non-critical): ${err.message}`, 'warning');
     }
 
-    // H5: Phase parallelism is disabled. Enabling would save ~50-65 seconds per audit.
-    // To enable:
-    // Parallel execution for Phases 1-6 (marked parallel: true).
-    // Cache safety: clearCaches() is called once before parallel phases start, not per-phase.
-    // Since the DOM doesn't change during an audit run, shared caches remain valid across phases.
-    // Per-phase cache scopes available via a11yHelpers.createCacheScope() for future isolation.
-    const FORCE_SEQUENTIAL = false;
+    // H5: Phase parallelism is disabled due to race conditions in checkpoint management.
+    // updateCheckpoint() uses spread-copy ({ ...checkpoint, ...updates }), so concurrent callers
+    // overwrite each other's changes. checkpoint.completedPhases.push() is also non-atomic when
+    // called from parallel promises. Re-enabling requires per-phase checkpoint isolation with a
+    // merge step after all parallel phases complete.
+    const FORCE_SEQUENTIAL = true;
 
     const parallelPhases = FORCE_SEQUENTIAL ? [] : phasesToRun.filter(p => p.parallel);
     const sequentialPhases = FORCE_SEQUENTIAL ? phasesToRun : phasesToRun.filter(p => !p.parallel);

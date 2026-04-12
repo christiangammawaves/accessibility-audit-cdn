@@ -1,7 +1,7 @@
 // a11y-audit-bundle.js — CDN bundle v13.2.0
-// Built: 2026-04-12T02:47:24Z
+// Built: 2026-04-12T03:27:24Z
 // Files: 71 (5 core + audit-bundle + 62 components + _audit-utils + orchestrator + exceptions)
-// https://cdn.jsdelivr.net/gh/{org}/accessibility-audit-unified@v13.2.0/dist/a11y-audit-bundle.min.js
+// https://cdn.jsdelivr.net/gh/christiangammawaves/accessibility-audit-cdn@v13.2.0/dist/a11y-audit-bundle.min.js
 
 // --- version.js ---
 /**
@@ -125,6 +125,20 @@
   const queryCacheTimestamps = new Map();
   const QUERY_CACHE_TTL = 10000;  // Extended: DOM doesn't change during a single audit run
   const QUERY_CACHE_MAX_SIZE = 1000;
+
+  // Unique container ID assignment for cache keys (avoids collision when
+  // multiple containers share the same tagName and have no id attribute).
+  let containerIdCounter = 0;
+  const containerIdMap = new WeakMap();
+  function getContainerId(container) {
+    if (container === document) return 'doc';
+    let id = containerIdMap.get(container);
+    if (id === undefined) {
+      id = 'c' + (containerIdCounter++);
+      containerIdMap.set(container, id);
+    }
+    return id;
+  }
 
   const VISIBILITY_CACHE_TTL = 10000;  // Extended: matches query cache TTL for audit-duration stability
   const VISIBILITY_CACHE_MAX_SIZE = 2000;
@@ -292,7 +306,7 @@
     container = container || document;
 
     // Create cache key from selector + container identity
-    const containerKey = container === document ? 'doc' : (container.id || container.tagName);
+    const containerKey = getContainerId(container);
     const cacheKey = selector + '|' + containerKey;
 
     const cached = queryCache.get(cacheKey);
@@ -41226,13 +41240,12 @@ async function testZoom(page, url) {
       log(`Contrast snapshot failed (non-critical): ${err.message}`, 'warning');
     }
 
-    // H5: Phase parallelism is disabled. Enabling would save ~50-65 seconds per audit.
-    // To enable:
-    // Parallel execution for Phases 1-6 (marked parallel: true).
-    // Cache safety: clearCaches() is called once before parallel phases start, not per-phase.
-    // Since the DOM doesn't change during an audit run, shared caches remain valid across phases.
-    // Per-phase cache scopes available via a11yHelpers.createCacheScope() for future isolation.
-    const FORCE_SEQUENTIAL = false;
+    // H5: Phase parallelism is disabled due to race conditions in checkpoint management.
+    // updateCheckpoint() uses spread-copy ({ ...checkpoint, ...updates }), so concurrent callers
+    // overwrite each other's changes. checkpoint.completedPhases.push() is also non-atomic when
+    // called from parallel promises. Re-enabling requires per-phase checkpoint isolation with a
+    // merge step after all parallel phases complete.
+    const FORCE_SEQUENTIAL = true;
 
     const parallelPhases = FORCE_SEQUENTIAL ? [] : phasesToRun.filter(p => p.parallel);
     const sequentialPhases = FORCE_SEQUENTIAL ? phasesToRun : phasesToRun.filter(p => !p.parallel);

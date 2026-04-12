@@ -195,10 +195,10 @@
     
     if (!config.exceptions) {
       log('ERROR: No exceptions provided.', 'error');
-      log('Load learned-exceptions.json and pass via initAudit({ exceptions: ... })', 'error');
+      log('Pass window.__A11Y_EXCEPTIONS via initAudit({ exceptions: window.__A11Y_EXCEPTIONS })', 'error');
       throw new Error(
-        'Exceptions required. Load learned-exceptions.json and pass to initAudit({ exceptions: exceptionsJSON }). ' +
-        'File location: /mnt/skills/user/accessibility-audit-unified/learned-exceptions.json'
+        'Exceptions required. Pass window.__A11Y_EXCEPTIONS to initAudit({ exceptions: window.__A11Y_EXCEPTIONS }). ' +
+        'Exceptions are embedded in the CDN bundle automatically.'
       );
     }
     

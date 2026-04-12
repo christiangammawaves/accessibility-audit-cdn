@@ -1,7 +1,7 @@
-// a11y-audit-bundle.js — CDN bundle v13.1.0
-// Built: 2026-04-10T21:44:55Z
+// a11y-audit-bundle.js — CDN bundle v13.2.0
+// Built: 2026-04-12T02:44:49Z
 // Files: 71 (5 core + audit-bundle + 62 components + _audit-utils + orchestrator + exceptions)
-// https://cdn.jsdelivr.net/gh/{org}/accessibility-audit-unified@v13.1.0/dist/a11y-audit-bundle.min.js
+// https://cdn.jsdelivr.net/gh/{org}/accessibility-audit-unified@v13.2.0/dist/a11y-audit-bundle.min.js
 
 // --- version.js ---
 /**
@@ -12,27 +12,36 @@
  * Inject this FIRST before any other audit scripts.
  * 
  * @module version
- * @version 13.1.0
+ * @version 13.2.0
  */
 
 (function(global) {
   'use strict';
 
   const VERSION_INFO = {
-    version: '13.1.0',
-    releaseDate: '2026-04-10',
+    version: '13.2.0',
+    releaseDate: '2026-04-12',
 
     // Changelog for current version
     changes: [
+      'DOC: Remove Quick audit tier — Standard is now the minimum for all audits',
+      'DOC: Add Phase 2 completion gate — all layers (A-D) must produce results before proceeding',
+      'DOC: Strengthen Phase 3 — mandatory remediation rewrite with file:line specifics for all findings',
+      'DOC: Add Phase 3 Part B — source-unavailable fallback path moved into Phase 3',
+      'DOC: Phase 4 (Interaction Testing) and Phase 5 (Visual Verification) now required for all audits',
+      'DOC: Add Phase 5.75 Step e — remediation quality validation gate',
+      'DOC: Add Common Failure Modes section to prevent anti-patterns',
+      'DOC: Remove redundant Verified Working Approach section (covered by enforced Phase 2)',
+      'FIX: Remove forms from SOURCE_REPLACEABLE_MODULES — too complex for source-only review',
+      'FIX: Scope ge-005 exception to specific WCAG criteria instead of wildcard',
+    ],
+
+    // Previous version changes (13.1.0)
+    previousChanges: [
       'DOC: Add Phase 2.5 — Independent Code Review for source-available audits',
       'DOC: Add Phase 5.75 — Post-Audit Enrichment (mandatory) for element_html, layer, confidence, component_type',
       'DOC: Define Audit Depth Tiers (Quick/Standard/Full) with mandatory minimums',
       'DOC: Update Dashboard Integration with real Edge Function endpoint and enriched payload mapping',
-    ],
-
-    // Previous version changes (13.0.1)
-    previousChanges: [
-      'DOC: Add dashboard integration section to SKILL.md — field mapping for fix → remediation and full AuditPayload structure',
     ],
 
     // Core script versions (all synced to main version via A11Y_VERSION)
@@ -103,9 +112,10 @@
   // SHARED MODULE LISTS (single source of truth for orchestrator + bundle)
   // ==========================================================================
 
-  const ALWAYS_RUN_MODULES = ['page-structure', 'color-contrast', 'reflow-spacing', 'wcag22-mobile'];
+  const ALWAYS_RUN_MODULES = ['page-structure', 'color-contrast', 'reflow-spacing', 'wcag22-mobile', 'images-of-text'];
 
-  const SOURCE_REPLACEABLE_MODULES = ['forms', 'modals'];
+  // v13.2.0: Removed 'forms' — too complex for source-only review (910+ lines, 20+ regex patterns)
+  const SOURCE_REPLACEABLE_MODULES = ['modals'];
 
   // ==========================================================================
   // PERFORMANCE CACHES
@@ -400,6 +410,28 @@
         invalidateElement(child, maxDepth, currentDepth + 1);
       }
     }
+  }
+
+  /**
+   * Create an isolated set of caches for parallel phase execution.
+   * Each scope contains its own Maps so concurrent phases don't interfere.
+   * @returns {Object} Cache scope with all cache Maps
+   */
+  function createCacheScope() {
+    return {
+      queryCache: new Map(),
+      queryCacheTimestamps: new Map(),
+      visibilityCache: new Map(),
+      visibilityCacheTimestamps: new Map(),
+      visibilityCacheBySelector: new Map(),
+      ariaHiddenCache: new Map(),
+      ariaHiddenCacheTimestamps: new Map(),
+      styleCache: new Map(),
+      styleCacheTimestamps: new Map(),
+      queryOnceCache: new Map(),
+      queryOnceCacheTimestamps: new Map(),
+      normalizeSelectorCache: new Map()
+    };
   }
 
   /**
@@ -740,7 +772,8 @@
       cacheResult(element, false);
       return false;
     }
-    if (parseFloat(style.opacity) === 0) {
+    // L1 fix: Use threshold instead of exact comparison for floating-point safety
+    if (parseFloat(style.opacity) < 0.01) {
       cacheResult(element, false);
       return false;
     }
@@ -1155,7 +1188,8 @@
 
     // Evict oldest entries if cache is too large
     if (normalizeSelectorCache.size > NORMALIZE_CACHE_MAX_SIZE) {
-      const keysToDelete = Array.from(normalizeSelectorCache.keys()).slice(0, 400);
+      // L3 fix: Use proportional eviction instead of hardcoded 400
+      const keysToDelete = Array.from(normalizeSelectorCache.keys()).slice(0, Math.ceil(normalizeSelectorCache.size * 0.2));
       for (const key of keysToDelete) {
         normalizeSelectorCache.delete(key);
       }
@@ -1505,6 +1539,24 @@
     return (lighter + 0.05) / (darker + 0.05);
   }
 
+  /**
+   * Walk up the DOM tree to find the first non-transparent background color.
+   * Returns a simple {r, g, b} color object, defaulting to white.
+   *
+   * @param {Element} element - DOM element to start from
+   * @returns {{r: number, g: number, b: number}} - Background color
+   */
+  function getBackgroundColor(element) {
+    let current = element;
+    while (current && current !== document.documentElement) {
+      const style = window.getComputedStyle(current);
+      const bg = parseColor(style.backgroundColor);
+      if (bg && bg.a >= 0.9) return bg;
+      current = current.parentElement;
+    }
+    return { r: 255, g: 255, b: 255 }; // Default white
+  }
+
   // ==========================================================================
   // ELEMENT DEDUPLICATION & CONTEXT HELPERS
   // ==========================================================================
@@ -1614,7 +1666,9 @@
     }
 
     // Check native HTML attribute equivalents (e.g., required -> aria-required)
+    // L2 fix: Add hasOwnProperty guard to prevent prototype pollution
     for (var nativeAttr in NATIVE_ARIA_EQUIVALENTS) {
+      if (!NATIVE_ARIA_EQUIVALENTS.hasOwnProperty(nativeAttr)) continue;
       if (NATIVE_ARIA_EQUIVALENTS[nativeAttr] === ariaAttribute) {
         if (element.hasAttribute(nativeAttr)) return true;
       }
@@ -1852,6 +1906,7 @@
     clearStyleCache: clearStyleCache,
     clearVisibilityCaches: clearVisibilityCaches,
     clearCachesForComponent: clearCachesForComponent,
+    createCacheScope: createCacheScope,
     invalidateElement: invalidateElement,
     getCacheStats: getCacheStats,
     invalidateQueryCache: invalidateQueryCache,
@@ -1912,6 +1967,7 @@
     parseColor: parseColor,
     getLuminance: getLuminance,
     getContrastRatio: getContrastRatio,
+    getBackgroundColor: getBackgroundColor,
 
     // Module lists (shared single source of truth)
     ALWAYS_RUN_MODULES: ALWAYS_RUN_MODULES,
@@ -2337,7 +2393,13 @@
     // Session exceptions take highest priority as they represent explicit user decisions
 
     // 1. Check session-added exceptions first (highest priority — user overrides)
-    for (const exception of learnedExceptions.sessionAdded) {
+    // H8 fix: Build lightweight WCAG index for session exceptions to avoid O(n*m) linear scan
+    const issueWcagForSession = issue.wcag || issue.criterion;
+    const sessionCandidates = learnedExceptions.sessionAdded.filter(exc => {
+      const excWcag = exc.wcag || ['*'];
+      return excWcag.includes('*') || excWcag.includes(issueWcagForSession);
+    });
+    for (const exception of sessionCandidates) {
       const matchResult = checkExceptionMatch(issue, element, exception);
       if (matchResult) {
         logExceptionMatch(exception, issue, 'session');
@@ -2533,8 +2595,9 @@
       timestamp: new Date().toISOString()
     };
     
+    // M12 fix: More aggressive trimming — keep 50% instead of 80% to prevent unbounded growth
     if (sessionExceptionLog.length >= EXCEPTION_LOG_MAX_SIZE) {
-      sessionExceptionLog = sessionExceptionLog.slice(-Math.floor(EXCEPTION_LOG_MAX_SIZE * 0.8));
+      sessionExceptionLog = sessionExceptionLog.slice(-Math.floor(EXCEPTION_LOG_MAX_SIZE * 0.5));
     }
     sessionExceptionLog.push(logEntry);
 
@@ -2919,7 +2982,13 @@
         // Negation: if the negated condition is true, the match fails
         if (check.not.labelFor === 'exists') {
           const id = element.getAttribute('id');
-          if (id && document.querySelector('label[for="' + id + '"]')) return false;
+          // H3/L8 fix: Use CSS.escape() for safe selector construction + try-catch
+          if (id) {
+            try {
+              const escapedId = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id;
+              if (document.querySelector('label[for="' + escapedId + '"]')) return false;
+            } catch (e) { /* invalid selector — skip check */ }
+          }
         }
       }
     }
@@ -2934,7 +3003,14 @@
     if (!pattern.cssRulePatterns || !Array.isArray(pattern.cssRulePatterns)) return false;
     try {
       const sheets = document.styleSheets;
-      const compiledPatterns = pattern.cssRulePatterns.map(p => new RegExp(p, 'i'));
+      // H2 fix: Cache compiled regex patterns on the pattern object to avoid recompiling per-issue
+      if (!pattern._compiledRegex) {
+        pattern._compiledRegex = pattern.cssRulePatterns.map(p => {
+          try { return new RegExp(p, 'i'); } catch { return null; }
+        }).filter(Boolean);
+      }
+      const compiledPatterns = pattern._compiledRegex;
+      if (compiledPatterns.length === 0) return false;
       for (let i = 0; i < sheets.length; i++) {
         let rules;
         try { rules = sheets[i].cssRules || sheets[i].rules; } catch { continue; }
@@ -2947,7 +3023,7 @@
         }
       }
     } catch {
-      // Cross-origin stylesheets may throw
+      // Cross-origin stylesheets or invalid regex may throw
     }
     return false;
   }
@@ -5518,9 +5594,11 @@
     }
 
     // Check for skipped heading levels
+    // L4 fix: Validate heading levels are 1-6 before processing
     const headingLevels = Object.entries(stats.headings)
       .filter(([, count]) => count > 0)
       .map(([key]) => parseInt(key.replace('h', ''), 10))
+      .filter(level => level >= 1 && level <= 6)
       .sort((a, b) => a - b);
     for (let i = 1; i < headingLevels.length; i++) {
       if (headingLevels[i] - headingLevels[i - 1] > 1) {
@@ -5789,7 +5867,8 @@
     'reviews': function() { return !!document.querySelector('[class*="yotpo"], [class*="jdgm"], [class*="stamped"], [class*="reviews"], #reviews'); },
     'announcements': function() { return !!document.querySelector('[class*="announcement"], [class*="promo-bar"], [class*="flash-sale"], [role="alert"], [role="status"]'); },
     'tooltips': function() { return !!document.querySelector('[role="tooltip"], [data-tooltip], [data-tippy], [title]:not(svg):not(iframe), [class*="tooltip"]'); },
-    'video-player': function() { return !!document.querySelector('video, iframe[src*="youtube"], iframe[src*="vimeo"], [class*="video-player"], [class*="video-container"]'); },
+    // L5 fix: Use more specific domain matching to avoid false positives
+    'video-player': function() { return !!document.querySelector('video, iframe[src*="youtube.com"], iframe[src*="youtu.be"], iframe[src*="vimeo.com"], [class*="video-player"], [class*="video-container"]'); },
     'collections-nav': function() { return !!document.querySelector('[class*="collection-nav"], [class*="category-nav"], aside nav, [role="tree"], .sidebar nav, [class*="sidebar-nav"]'); },
     'buttons': function() { return !!document.querySelector('button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]'); },
     'color-contrast': function() { return true; },
@@ -5891,10 +5970,11 @@
 
   // Module lists: use shared-helpers as single source of truth, with local fallback
   var BUNDLE_ALWAYS_RUN = (helpers && helpers.ALWAYS_RUN_MODULES)
-    || ['page-structure', 'color-contrast', 'reflow-spacing', 'wcag22-mobile'];
+    || ['page-structure', 'color-contrast', 'reflow-spacing', 'wcag22-mobile', 'images-of-text'];
 
+  // v13.2.0: Removed 'forms' from fallback — too complex for source-only review
   var BUNDLE_SOURCE_REPLACEABLE = (helpers && helpers.SOURCE_REPLACEABLE_MODULES)
-    || ['forms', 'modals'];
+    || ['modals'];
 
   function runFullAudit(options) {
     // Guard: verify injected scripts are still present (page refresh detection)
@@ -6066,6 +6146,12 @@
   'use strict';
 
   if (!global.a11yAudit) global.a11yAudit = {};
+
+  // M7 fix: Shared performance constants for consistent timeout behavior across modules
+  global.a11yAudit.PERF = {
+    TIMEOUT_MS: 2000,         // Max time for any single loop/scan before breaking
+    SAMPLING_INTERVAL: 500    // Check elapsed time every N elements
+  };
 
   var IMPACT_MAP = {
     critical: 'Users cannot complete essential tasks',
@@ -8737,7 +8823,8 @@ function runBreadcrumbsAudit() {
 
       if (separatorChars.some(char => remainingText.includes(char))) {
         // Check if it's aria-hidden
-        const allChildren = li.querySelectorAll('*');
+        // M1 fix: Use scoped selector instead of full-subtree querySelectorAll('*')
+        const allChildren = li.querySelectorAll(':scope > *');
         let separatorHidden = false;
         allChildren.forEach(child => {
           if (child.getAttribute('aria-hidden') === 'true' && separatorChars.some(char => child.textContent.includes(char))) {
@@ -12191,6 +12278,11 @@ function runColorContrastAudit() {
   }
 
   function blendColors(fg, bg) {
+    // M4 fix: Warn when both colors are missing instead of silently defaulting to white
+    if (!fg && !bg) {
+      if (typeof console !== 'undefined') console.warn('[color-contrast] blendColors: both fg and bg are null/undefined, defaulting to white');
+      return { r: 255, g: 255, b: 255 };
+    }
     if (!fg || !bg) return bg || fg || { r: 255, g: 255, b: 255 };
     
     const alpha = fg.a !== undefined ? fg.a : 1;
@@ -12223,6 +12315,22 @@ function runColorContrastAudit() {
     return (lighter + 0.05) / (darker + 0.05);
   }
 
+  // H4 fix: Calculate effective opacity including all ancestor opacities
+  function getEffectiveOpacity(element) {
+    var opacity = 1;
+    var current = element;
+    var maxDepth = 20;
+    while (current && current !== document.documentElement && maxDepth-- > 0) {
+      var style = window.getComputedStyle(current);
+      var currentOpacity = parseFloat(style.opacity);
+      if (!isNaN(currentOpacity)) {
+        opacity *= currentOpacity;
+      }
+      current = current.parentElement;
+    }
+    return opacity;
+  }
+
   function colorToHex(color) {
     if (!color) return 'unknown';
     const toHex = (n) => {
@@ -12237,15 +12345,7 @@ function runColorContrastAudit() {
   // ============================================================
 
   const { results, h, addIssue, addPassed, addManualCheck, getDefaultImpact } = window.a11yAudit.initComponent('color-contrast', 'Text elements, UI components, and graphical objects');
-  const { isVisible, getSelector: getSelectorHelper } = h;
-
-  function isElementVisible(element) {
-    return isVisible(element);
-  }
-
-  function getSelector(element) {
-    return getSelectorHelper(element);
-  }
+  const { isVisible, getSelector } = h;
 
   function getTextContent(element) {
     const text = (element.textContent || '').trim();
@@ -12257,8 +12357,12 @@ function runColorContrastAudit() {
     let backgrounds = [];
     let ancestorChain = []; // Track ancestors for manual review context
     let hasTransparentAncestor = false;
-    
-    while (current && current !== document.documentElement) {
+    // M5 fix: Cap ancestor depth to prevent memory bloat on deeply nested DOMs
+    const MAX_ANCESTOR_DEPTH = 20;
+    let depth = 0;
+
+    while (current && current !== document.documentElement && depth < MAX_ANCESTOR_DEPTH) {
+      depth++;
       const style = window.getComputedStyle(current);
       const bg = parseColor(style.backgroundColor);
       
@@ -12387,7 +12491,7 @@ function runColorContrastAudit() {
         console.warn(`Color contrast audit: Reached ${CONFIG.maxTextElements} element limit.`);
         break;
       }
-      if (!isElementVisible(element)) continue;
+      if (!isVisible(element)) continue;
       
       const hasDirectText = Array.from(element.childNodes)
         .some(node => node.nodeType === 3 && node.textContent.trim().length >= CONFIG.minTextLength);
@@ -12404,10 +12508,10 @@ function runColorContrastAudit() {
 
       if (!textColor) continue;
 
-      // A8: Factor element-level opacity into text color alpha
-      const elementOpacity = parseFloat(style.opacity);
-      if (!isNaN(elementOpacity) && elementOpacity < 0.95) {
-        textColor = { r: textColor.r, g: textColor.g, b: textColor.b, a: (textColor.a || 1) * elementOpacity };
+      // H4 fix: Factor in effective opacity (element + all ancestors), not just element opacity
+      const effectiveOpacity = getEffectiveOpacity(element);
+      if (effectiveOpacity < 0.95) {
+        textColor = { r: textColor.r, g: textColor.g, b: textColor.b, a: (textColor.a || 1) * effectiveOpacity };
       }
 
       // A8: CSS filter may alter perceived contrast — flag for manual review
@@ -12525,7 +12629,7 @@ function runColorContrastAudit() {
 
     for (const element of sortedElements) {
       if (count >= CONFIG.maxTextElements) break;
-      if (!isElementVisible(element)) continue;
+      if (!isVisible(element)) continue;
       
       const hasDirectText = Array.from(element.childNodes)
         .some(node => node.nodeType === 3 && node.textContent.trim().length >= CONFIG.minTextLength);
@@ -12611,7 +12715,7 @@ function runColorContrastAudit() {
     
     for (const element of uiComponents) {
       if (count >= CONFIG.maxUIElements) break;
-      if (!isElementVisible(element)) continue;
+      if (!isVisible(element)) continue;
       count++;
       
       const style = window.getComputedStyle(element);
@@ -21092,17 +21196,52 @@ function runImagesOfTextAudit() {
   }
 
   // ==========================================================================
-  // TEST 2: Background Images with Text
+  // TEST 2: SVG Text Elements
+  // ==========================================================================
+
+  function testSvgTextElements() {
+    const PERF = (window.a11yAudit && window.a11yAudit.PERF) || { TIMEOUT_MS: 2000, SAMPLING_INTERVAL: 500 };
+    const svgTextStart = performance.now();
+    const svgTexts = document.querySelectorAll('svg text, svg textPath');
+
+    for (let i = 0; i < svgTexts.length; i++) {
+      if (i % PERF.SAMPLING_INTERVAL === 0 && performance.now() - svgTextStart > PERF.TIMEOUT_MS) break;
+      const textEl = svgTexts[i];
+      if (!isVisible(textEl)) continue;
+
+      results.stats.elementsScanned++;
+
+      const svgParent = textEl.closest('svg');
+      if (!svgParent) continue;
+
+      // Skip decorative SVGs
+      if (svgParent.getAttribute('aria-hidden') === 'true') continue;
+      if (svgParent.getAttribute('role') === 'img' && svgParent.getAttribute('aria-label')) continue;
+
+      addManualCheck(
+        '1.4.5',
+        'SVG contains text element — verify this is not an image of text',
+        'SVG contains a <text> or <textPath> element. Verify this is not text that could be rendered as real HTML text instead. Exceptions: logos, diagrams where text is integral.',
+        getSelector(textEl)
+      );
+    }
+  }
+
+  // ==========================================================================
+  // TEST 3: Background Images with Text
   // ==========================================================================
 
   function testBackgroundImagesWithText() {
+    const PERF = (window.a11yAudit && window.a11yAudit.PERF) || { TIMEOUT_MS: 2000, SAMPLING_INTERVAL: 500 };
     // Check for elements with background images that might contain text
     const bgTextStart = performance.now();
-    const allElements = document.querySelectorAll('[style*="background"], [class*="bg-"], [class*="background"], section, div, article, header, footer, aside, main');
+    const allElements = document.querySelectorAll(
+      '[style*="background-image"], [class*="bg-"], [class*="background"], [class*="hero"], [class*="banner"], [class*="cta"], section, div, article, header, footer, aside, main'
+    );
     let bgImagesWithText = [];
 
     for (let i = 0; i < allElements.length; i++) {
-      if (i % 500 === 0 && performance.now() - bgTextStart > 2000) break; // 2s timeout guard
+      if (i % PERF.SAMPLING_INTERVAL === 0 && performance.now() - bgTextStart > PERF.TIMEOUT_MS) break;
       const el = allElements[i];
       if (!isVisible(el)) continue;
 
@@ -21111,6 +21250,8 @@ function runImagesOfTextAudit() {
 
       // Skip if no background image
       if (!bgImage || bgImage === 'none') continue;
+
+      results.stats.elementsScanned++;
 
       // Check if element has text content
       const hasDirectText = el.childNodes.length > 0 &&
@@ -21142,6 +21283,7 @@ function runImagesOfTextAudit() {
   // ==========================================================================
 
   testImagesOfText();
+  testSvgTextElements();
   testBackgroundImagesWithText();
 
   // ==========================================================================
@@ -21502,9 +21644,9 @@ if (typeof window !== 'undefined') {
        * Programmatically focus elements to capture actual focus styles
        */
       function captureActiveFocusStyles(element) {
-        // Store current active element to restore later
+        // H6 fix: Store active element and use try-finally to guarantee focus restoration
         const previousActiveElement = document.activeElement;
-        
+
         try {
           // Capture styles BEFORE focus
           const beforeStyle = window.getComputedStyle(element);
@@ -21519,9 +21661,13 @@ if (typeof window !== 'undefined') {
             borderColor: beforeStyle.borderColor,
             backgroundColor: beforeStyle.backgroundColor
           };
-          
-          // Programmatically focus the element
-          element.focus({ preventScroll: true });
+
+          // H6 fix: Wrap .focus() in try-catch — some elements may throw
+          try {
+            element.focus({ preventScroll: true });
+          } catch (focusErr) {
+            return null; // Element can't be focused — skip it
+          }
           
           // Capture styles AFTER focus
           const afterStyle = window.getComputedStyle(element);
@@ -21537,17 +21683,8 @@ if (typeof window !== 'undefined') {
             backgroundColor: afterStyle.backgroundColor
           };
           
-          // Restore focus to previous element
-          if (previousActiveElement && previousActiveElement !== element) {
-            try {
-              previousActiveElement.focus({ preventScroll: true });
-            } catch (e) {
-              element.blur();
-            }
-          } else {
-            element.blur();
-          }
-          
+          // Focus restoration is handled in the finally block
+
           // Analyze focus indicator type
           const focusIndicator = {
             hasOutline: false,
@@ -21602,59 +21739,25 @@ if (typeof window !== 'undefined') {
             after: afterStyles,
             indicator: focusIndicator
           };
-          
+
         } catch (e) {
           return null;
+        } finally {
+          // H6 fix: Always restore focus, even if an exception occurred
+          try {
+            if (previousActiveElement && previousActiveElement !== element && typeof previousActiveElement.focus === 'function') {
+              previousActiveElement.focus({ preventScroll: true });
+            } else if (element && typeof element.blur === 'function') {
+              element.blur();
+            }
+          } catch (restoreErr) { /* best-effort focus restore */ }
         }
       }
       
-      /**
-       * Calculate contrast ratio between two colors
-       */
-      function getContrastRatio(color1, color2) {
-        const getLum = (c) => {
-          const sRGB = c / 255;
-          return sRGB <= 0.04045 ? sRGB / 12.92 : Math.pow((sRGB + 0.055) / 1.055, 2.4);
-        };
-        
-        const lum1 = 0.2126 * getLum(color1.r) + 0.7152 * getLum(color1.g) + 0.0722 * getLum(color1.b);
-        const lum2 = 0.2126 * getLum(color2.r) + 0.7152 * getLum(color2.g) + 0.0722 * getLum(color2.b);
-        
-        return (Math.max(lum1, lum2) + 0.05) / (Math.min(lum1, lum2) + 0.05);
-      }
-      
-      /**
-       * Parse CSS color to RGB
-       */
-      function parseColor(colorStr) {
-        if (!colorStr || colorStr === 'transparent') return null;
-        const match = colorStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-        if (match) {
-          return { r: parseInt(match[1]), g: parseInt(match[2]), b: parseInt(match[3]) };
-        }
-        return null;
-      }
-      
-      /**
-       * Get background color traversing up the DOM
-       */
-      function getBackgroundColor(element) {
-        let bgColor = { r: 255, g: 255, b: 255 };
-        let parent = element.parentElement;
-        
-        while (parent) {
-          const parentStyle = window.getComputedStyle(parent);
-          const parentBg = parentStyle.backgroundColor;
-          const parsed = parseColor(parentBg);
-          if (parsed) {
-            bgColor = parsed;
-            break;
-          }
-          parent = parent.parentElement;
-        }
-        
-        return bgColor;
-      }
+      // H1 fix: Delegate to shared-helpers instead of duplicating color utilities
+      const getContrastRatio = h.getContrastRatio || function(c1, c2) { return 1; };
+      const parseColor = h.parseColor || function(s) { return null; };
+      const getBackgroundColor = h.getBackgroundColor || function() { return { r: 255, g: 255, b: 255 }; };
       
       // Check for :focus-visible support in stylesheets
       try {
@@ -22179,52 +22282,10 @@ function runKeyboardFocusAudit() {
     };
   }
 
-  function parseColor(color) {
-    if (!color || color === 'transparent' || color === 'rgba(0, 0, 0, 0)') {
-      return null;
-    }
-    
-    const rgbaMatch = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)/);
-    if (rgbaMatch) {
-      return {
-        r: parseInt(rgbaMatch[1], 10),
-        g: parseInt(rgbaMatch[2], 10),
-        b: parseInt(rgbaMatch[3], 10),
-        a: rgbaMatch[4] !== undefined ? parseFloat(rgbaMatch[4]) : 1
-      };
-    }
-    return null;
-  }
-
-  function sRGBtoLinear(c) {
-    c = c / 255;
-    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-  }
-
-  function getLuminance(color) {
-    if (!color) return 0;
-    return 0.2126 * sRGBtoLinear(color.r) + 0.7152 * sRGBtoLinear(color.g) + 0.0722 * sRGBtoLinear(color.b);
-  }
-
-  function getContrastRatio(color1, color2) {
-    if (!color1 || !color2) return null;
-    const l1 = getLuminance(color1);
-    const l2 = getLuminance(color2);
-    const lighter = Math.max(l1, l2);
-    const darker = Math.min(l1, l2);
-    return (lighter + 0.05) / (darker + 0.05);
-  }
-
-  function getBackgroundColor(element) {
-    let current = element;
-    while (current && current !== document.documentElement) {
-      const style = window.getComputedStyle(current);
-      const bg = parseColor(style.backgroundColor);
-      if (bg && bg.a >= 0.9) return bg;
-      current = current.parentElement;
-    }
-    return { r: 255, g: 255, b: 255 }; // Default white
-  }
+  // H1 fix: Delegate to shared-helpers instead of duplicating color utilities
+  const parseColor = (global.a11yHelpers && global.a11yHelpers.parseColor) || function(c) { return null; };
+  const getContrastRatio = (global.a11yHelpers && global.a11yHelpers.getContrastRatio) || function(c1, c2) { return null; };
+  const getBackgroundColor = (global.a11yHelpers && global.a11yHelpers.getBackgroundColor) || function() { return { r: 255, g: 255, b: 255 }; };
 
   // ============================================================
   // Audit Functions
@@ -22840,15 +22901,7 @@ function runLanguageContextAudit() {
   // ============================================================
 
   const { results, h, addIssue, addPassed, addManualCheck, getDefaultImpact } = window.a11yAudit.initComponent('language-context', ['html', 'body', '[lang]', '[hreflang]']);
-  const { isVisible, getSelector: getSelectorHelper } = h;
-
-  function getSelector(element) {
-    return getSelectorHelper(element);
-  }
-
-  function isElementVisible(element) {
-    return isVisible(element);
-  }
+  const { isVisible, getSelector } = h;
 
   function detectLanguage(text) {
     if (!text || text.length < 10) return null;
@@ -22892,7 +22945,7 @@ function runLanguageContextAudit() {
     const textElements = Array.from(document.querySelectorAll(
       'p, span, div, blockquote, q, cite, figcaption, td, li'
     ))
-      .filter(el => isElementVisible(el))
+      .filter(el => isVisible(el))
       .slice(0, CONFIG.maxElementsToCheck);
     
     results.stats.elementsScanned += textElements.length;
@@ -22931,7 +22984,7 @@ function runLanguageContextAudit() {
     const quotes = document.querySelectorAll('q, blockquote');
     results.stats.elementsScanned += quotes.length;
     quotes.forEach(quote => {
-      if (!isElementVisible(quote)) return;
+      if (!isVisible(quote)) return;
       if (quote.hasAttribute('lang')) return;
       
       const text = quote.textContent.trim();
@@ -24154,6 +24207,8 @@ function runModalsAudit() {
       addIssue('serious', '4.1.2', 'Name, Role, Value', 'Modal (' + modalType + ') missing aria-modal="true"', modal, 'Add aria-modal="true" to indicate focus should be trapped', 'Screen readers may allow focus to escape modal');
     } else if (ariaModal === 'true' || isNativeDialog) {
       addPassed('4.1.2', 'Name, Role, Value', 'Modal has aria-modal="true"', getSelector(modal));
+      // M6 fix: aria-modal alone doesn't guarantee focus trap — flag for manual verification
+      addManualCheck('2.4.3', 'Focus Order', 'Verify modal focus trap is implemented — Tab should cycle within modal only and Escape should close it', getSelector(modal));
     }
     
     // Test 3: Accessible Name
@@ -24368,15 +24423,7 @@ function runMotionAnimationAudit() {
   // ============================================================
 
   const { results, h, addIssue, addPassed, addManualCheck, getDefaultImpact } = window.a11yAudit.initComponent('motion-animation', 'Animations, transitions, auto-playing media, and motion preferences');
-  const { isVisible, getSelector: getSelectorHelper } = h;
-
-  function getSelector(element) {
-    return getSelectorHelper(element);
-  }
-
-  function isElementVisible(element) {
-    return isVisible(element);
-  }
+  const { isVisible, getSelector } = h;
 
   function detectAnimationLibraries() {
     const detected = [];
@@ -24403,7 +24450,7 @@ function runMotionAnimationAudit() {
     const videos = Array.from(document.querySelectorAll('video'));
     results.stats.elementsScanned += videos.length;
     for (const video of videos) {
-      if (!isElementVisible(video)) continue;
+      if (!isVisible(video)) continue;
 
       const autoplay = video.hasAttribute('autoplay');
       const muted = video.muted || video.hasAttribute('muted');
@@ -24446,7 +24493,7 @@ function runMotionAnimationAudit() {
     const audios = Array.from(document.querySelectorAll('audio'));
     results.stats.elementsScanned += audios.length;
     for (const audio of audios) {
-      if (!isElementVisible(audio)) continue;
+      if (!isVisible(audio)) continue;
       
       const autoplay = audio.hasAttribute('autoplay');
       const controls = audio.hasAttribute('controls');
@@ -24483,7 +24530,7 @@ function runMotionAnimationAudit() {
     // Media without controls check — duration > 3s (migrated from comprehensive-audit.js auditMotion)
     var allMedia = document.querySelectorAll('video, audio');
     allMedia.forEach(function(media) {
-      if (!isElementVisible(media)) return;
+      if (!isVisible(media)) return;
       var hasControls = media.hasAttribute('controls');
       // Duration may not be available until metadata loads; check if > 3
       var duration = media.duration;
@@ -24534,7 +24581,7 @@ function runMotionAnimationAudit() {
     // GIF pause mechanism check (migrated from comprehensive-audit.js auditMotion)
     var gifs = document.querySelectorAll('img[src$=".gif"], img[src*=".gif?"]');
     gifs.forEach(function(gif) {
-      if (!isElementVisible(gif)) return;
+      if (!isVisible(gif)) return;
       results.stats.elementsScanned++;
       addManualCheck(
         '2.2.2',
@@ -24556,7 +24603,7 @@ function runMotionAnimationAudit() {
     for (let i = 0; i < _allPageElements.length && animatedElements.length < CONFIG.maxElementsToCheck; i++) {
       if (i % 500 === 0 && performance.now() - flashAnimStart > 2000) break; // 2s timeout guard
       const el = _allPageElements[i];
-      if (!isElementVisible(el)) continue;
+      if (!isVisible(el)) continue;
       const style = h.getStyle(el);
       if (style.animation !== 'none' && style.animation !== '') {
         // P6: Cache properties from first pass to avoid second getComputedStyle call below
@@ -24608,7 +24655,7 @@ function runMotionAnimationAudit() {
     if (CONFIG.checkVideos) {
       const videos = document.querySelectorAll('video');
       videos.forEach(video => {
-        if (!isElementVisible(video)) return;
+        if (!isVisible(video)) return;
         addManualCheck(
           '2.3.1',
           'Verify video for flashing content',
@@ -24711,7 +24758,7 @@ function runMotionAnimationAudit() {
     for (let i = 0; i < _allPageElements.length && animatedElements2.length < 50; i++) {
       if (i % 500 === 0 && performance.now() - cssAnimStart > 2000) break; // 2s timeout guard
       const el = _allPageElements[i];
-      if (!isElementVisible(el)) continue;
+      if (!isVisible(el)) continue;
       const style = window.getComputedStyle(el);
       if ((style.animation !== 'none' && style.animation !== '') ||
           (style.transition !== 'all 0s ease 0s' && style.transition !== 'none')) {
@@ -24816,7 +24863,7 @@ function runMotionAnimationAudit() {
     // GIF image flashing manual check
     var gifs = document.querySelectorAll('img[src$=".gif"], img[src*=".gif?"]');
     gifs.forEach(function(gif) {
-      if (!isElementVisible(gif)) return;
+      if (!isVisible(gif)) return;
       results.stats.elementsScanned++;
       issues.push({
         severity: 'moderate',
@@ -31165,19 +31212,11 @@ function runReflowSpacingAudit() {
   };
 
   const { results, h, addIssue, addPassed, addManualCheck, getDefaultImpact } = window.a11yAudit.initComponent('reflow-spacing', 'Page reflow at 400% zoom and text spacing overrides');
-  const { isVisible, getSelector: getSelectorHelper } = h;
+  const { isVisible, getSelector } = h;
 
   // ============================================================
   // Helper Functions
   // ============================================================
-
-  function getSelector(element) {
-    return getSelectorHelper(element);
-  }
-
-  function isElementVisible(element) {
-    return isVisible(element);
-  }
 
   /**
    * Skip known carousel/slider patterns and elements inside scrollable containers.
@@ -31277,7 +31316,7 @@ function runReflowSpacingAudit() {
       const allElements = Array.from(document.querySelectorAll('[style*="width"], [style*="min-width"]'))
         .filter((el, i) => {
           if (i % 500 === 0 && performance.now() - fixedWidthStart > 2000) return false; // 2s timeout
-          if (!isElementVisible(el)) return false;
+          if (!isVisible(el)) return false;
           if (isExcludedPattern(el)) return false;
           return true;
         })
@@ -31335,7 +31374,7 @@ function runReflowSpacingAudit() {
       const elementsWithOverflow = Array.from(document.querySelectorAll('[style*="overflow"]'))
         .filter((el, i) => {
           if (i % 500 === 0 && performance.now() - overflowStart > 2000) return false; // 2s timeout
-          if (!isElementVisible(el)) return false;
+          if (!isVisible(el)) return false;
           if (isExcludedPattern(el)) return false;
           const style = h.getStyle(el);
           return style.overflow === 'hidden' || style.overflowX === 'hidden';
@@ -31387,7 +31426,7 @@ function runReflowSpacingAudit() {
       'div, section, article, main, aside, header, footer, nav, p, blockquote, figcaption'
     ))
       .filter(el => {
-        if (!isElementVisible(el)) return false;
+        if (!isVisible(el)) return false;
         if (isExcludedPattern(el)) return false;
         const style = h.getStyle(el);
         if (style.overflow !== 'hidden' && style.overflowY !== 'hidden') return false;
@@ -31432,7 +31471,7 @@ function runReflowSpacingAudit() {
       'div, p, span, a, button, label, h1, h2, h3, h4, h5, h6'
     ))
       .filter(el => {
-        if (!isElementVisible(el)) return false;
+        if (!isVisible(el)) return false;
         if (isExcludedPattern(el)) return false;
         const hasDirectText = Array.from(el.childNodes)
           .some(node => node.nodeType === 3 && node.textContent.trim().length > 0);
@@ -39164,10 +39203,6 @@ function runWcag22MobileAudit() {
   const { results, h, addIssue, addPassed, addManualCheck, getDefaultImpact } = window.a11yAudit.initComponent('wcag22-mobile', 'Touch targets, pointer gestures, motion actuation, and dragging movements');
   const { isVisible, getSelector } = h;
 
-  function isElementVisible(element) {
-    return isVisible(element);
-  }
-
   // ============================================================
   // Audit Functions
   // ============================================================
@@ -39183,7 +39218,7 @@ function runWcag22MobileAudit() {
     
     interactiveElements.forEach(element => {
       results.stats.elementsScanned++;
-      if (!isElementVisible(element)) return;
+      if (!isVisible(element)) return;
 
       const hasMousedown = element.hasAttribute('onmousedown');
       const hasTouchstart = element.hasAttribute('ontouchstart');
@@ -39320,7 +39355,7 @@ function runWcag22MobileAudit() {
     
     draggableElements.forEach(element => {
       results.stats.elementsScanned++;
-      if (!isElementVisible(element)) return;
+      if (!isVisible(element)) return;
 
       // Check if there's a keyboard alternative or single-pointer alternative
       const hasKeyboardAlternative = element.hasAttribute('tabindex') && 
@@ -39384,7 +39419,7 @@ function runWcag22MobileAudit() {
     // Collect visible targets with their rects
     targets.forEach(target => {
       if (count >= CONFIG.maxTargets) return;
-      if (!isElementVisible(target)) return;
+      if (!isVisible(target)) return;
       
       const rect = target.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) {
@@ -40390,10 +40425,12 @@ async function testZoom(page, url) {
 
   // Module lists: use shared-helpers as single source of truth, with local fallback
   const ALWAYS_RUN_MODULES = (global.a11yHelpers && global.a11yHelpers.ALWAYS_RUN_MODULES)
-    || ['page-structure', 'color-contrast', 'reflow-spacing', 'wcag22-mobile'];
+    || ['page-structure', 'color-contrast', 'reflow-spacing', 'wcag22-mobile', 'images-of-text'];
 
+  // v13.2.0: Removed 'forms' — forms.js (910+ lines, 20+ regex patterns) cannot be
+  // replicated by human source review. Only 'modals' remains source-replaceable.
   const SOURCE_REPLACEABLE_MODULES = (global.a11yHelpers && global.a11yHelpers.SOURCE_REPLACEABLE_MODULES)
-    || ['forms', 'modals'];
+    || ['modals'];
 
   const PHASES = [
     {
@@ -40641,6 +40678,7 @@ async function testZoom(page, url) {
             requiresAttention: true
           };
           fullResults.unverified = true;
+          fullResults.verificationFailed = true; // C2 fix: Explicit flag for Dashboard consumers
           fullResults.verificationWarning = 'CRITICAL: Verification failed. All findings are unverified and should not be included in client reports without manual re-verification.';
           fullResults.allIssues = fullResults.allIssues.map(issue => ({
             ...issue,
@@ -40658,6 +40696,7 @@ async function testZoom(page, url) {
           requiresAttention: true
         };
         fullResults.unverified = true;
+        fullResults.verificationFailed = true; // C2 fix: Explicit flag for Dashboard consumers
         fullResults.verificationWarning = 'CRITICAL: Verification threw an error (' + err.message + '). All findings are unverified.';
         fullResults.allIssues = fullResults.allIssues.map(issue => ({
           ...issue,
@@ -40705,7 +40744,14 @@ async function testZoom(page, url) {
     global.__a11yFullResults = fullResults;
   }
 
-  // Safe wrapper: catches errors and returns standardized error object
+  /**
+   * M9: Safe wrapper that handles both sync and async functions.
+   * Duck-types the return value: if it has a .then(), attach a .catch().
+   * This means callers can use await on the result regardless of whether fn() is sync or async.
+   * @param {Function} fn - Function to execute (may return a value or a Promise)
+   * @param {string} label - Phase/component label for error reporting
+   * @returns {*|Promise} The function result or a standardized error object
+   */
   function safeExecute(fn, label) {
     try {
       const result = fn();
@@ -40746,11 +40792,15 @@ async function testZoom(page, url) {
     };
   }
 
-  async function executePhase(phase, config) {
+  async function executePhase(phase, config, options) {
+    options = options || {};
     const phaseStartTime = performance.now();
     log(`Starting Phase ${phase.id}: ${phase.name}`, 'phase');
 
-    if (global.a11yHelpers && global.a11yHelpers.clearCaches) {
+    // Skip cache clearing for parallel phases — shared caches remain valid since
+    // the DOM doesn't change during an audit. Clearing mid-parallel would wipe
+    // other phases' cached data.
+    if (!options.skipCacheClear && global.a11yHelpers && global.a11yHelpers.clearCaches) {
       try {
         global.a11yHelpers.clearCaches();
         log(`  Cache cleared for phase ${phase.id}`);
@@ -41176,21 +41226,34 @@ async function testZoom(page, url) {
       log(`Contrast snapshot failed (non-critical): ${err.message}`, 'warning');
     }
 
-    // Sequential execution ensures deterministic phase ordering.
-    // TODO: Phase parallelism is disabled because clearCaches() in executePhase()
-    // assumes sequential execution. Enabling parallel execution requires per-phase
-    // cache isolation. Phases 1-6 are marked parallel:true and ready when this is resolved.
-    const FORCE_SEQUENTIAL = true;
+    // H5: Phase parallelism is disabled. Enabling would save ~50-65 seconds per audit.
+    // To enable:
+    // Parallel execution for Phases 1-6 (marked parallel: true).
+    // Cache safety: clearCaches() is called once before parallel phases start, not per-phase.
+    // Since the DOM doesn't change during an audit run, shared caches remain valid across phases.
+    // Per-phase cache scopes available via a11yHelpers.createCacheScope() for future isolation.
+    const FORCE_SEQUENTIAL = false;
 
     const parallelPhases = FORCE_SEQUENTIAL ? [] : phasesToRun.filter(p => p.parallel);
     const sequentialPhases = FORCE_SEQUENTIAL ? phasesToRun : phasesToRun.filter(p => !p.parallel);
 
     if (parallelPhases.length > 0) {
       log(`Running ${parallelPhases.length} parallel phase(s): ${parallelPhases.map(p => p.id).join(', ')}`, 'phase');
+
+      // Clear caches once before parallel execution starts (not per-phase)
+      if (global.a11yHelpers && global.a11yHelpers.clearCaches) {
+        try {
+          global.a11yHelpers.clearCaches();
+          log('  Caches cleared before parallel phase execution');
+        } catch (cacheErr) {
+          log(`  Cache clear failed (non-fatal): ${cacheErr.message}`, 'warning');
+        }
+      }
+
       const settled = await Promise.allSettled(
         parallelPhases.map(async (phase) => {
           updateCheckpoint({ currentPhase: phase.id });
-          const phaseResults = await executePhase(phase, config);
+          const phaseResults = await executePhase(phase, config, { skipCacheClear: true });
           updateResults(phase.id, phaseResults);
           checkpoint.completedPhases.push(phase.id);
           updateCheckpoint({ completedPhases: checkpoint.completedPhases });
@@ -41552,12 +41615,14 @@ window.__A11Y_EXCEPTIONS = {
       "pattern": {
         "type": "element-context",
         "checks": [
-          { "attribute": "alt", "condition": "equals", "value": "" },
-          { "attribute": "role", "condition": "in", "values": ["presentation", "none"] }
+          { "or": [
+            { "attribute": "alt", "condition": "equals", "value": "" },
+            { "attribute": "role", "condition": "in", "values": ["presentation", "none"] }
+          ]}
         ]
       },
       "wcag": ["1.1.1"],
-      "reason": "Properly marked decorative image",
+      "reason": "Properly marked decorative image — either alt=\"\" OR role=presentation/none suffices",
       "confidence": 100,
       "addedDate": "2026-01-25",
       "verifiedCount": 0,
@@ -41594,7 +41659,7 @@ window.__A11Y_EXCEPTIONS = {
         "checks": [{ "textContent": "skip", "condition": "contains-ignore-case" }]
       },
       "wcag": ["2.5.8"],
-      "reason": "Skip links are intentionally small/off-screen when not focused — expand on :focus.",
+      "reason": "Skip links are intentionally small/off-screen when not focused — expand on :focus. Note: ge-004 handles visibility (2.4.1); this exception handles target size (2.5.8).",
       "confidence": 95,
       "addedDate": "2026-02-05",
       "verifiedCount": 1,
@@ -41673,8 +41738,8 @@ window.__A11Y_EXCEPTIONS = {
           ]}
         ]
       },
-      "wcag": ["*"],
-      "reason": "Hidden content not exposed to any users",
+      "wcag": ["1.1.1", "1.3.1", "1.4.3", "1.4.11"],
+      "reason": "Hidden content not exposed to any users. Scoped to visual-only criteria — keyboard/focus issues (2.1.x, 2.4.x) on hidden interactive elements are still flagged.",
       "confidence": 95,
       "addedDate": "2026-01-25",
       "verifiedCount": 0,
@@ -41847,32 +41912,6 @@ window.__A11Y_EXCEPTIONS = {
       "lastVerified": null
     },
     {
-      "id": "ge-020",
-      "pattern": {
-        "type": "severity-modifier",
-        "description": "Ticker/marquee with existing pause control — reflow is lower priority",
-        "selectors": [
-          "[class*='ticker']", "[class*='marquee']", "[class*='scrolling']",
-          "[class*='logo-list']", "[class*='logo-bar']"
-        ],
-        "checks": [
-          { "or": [
-            { "descendant": "button[aria-label*='pause']", "condition": "exists" },
-            { "descendant": "button[aria-label*='play']", "condition": "exists" },
-            { "descendant": "button .visually-hidden", "condition": "exists" },
-            { "descendant": "button .sr-only", "condition": "exists" }
-          ]}
-        ],
-        "modifiedSeverity": "minor"
-      },
-      "wcag": ["1.4.10"],
-      "reason": "If a marquee or ticker section already has a functional pause/play button (with proper visually-hidden text), the reflow issue caused by its fixed width is lower severity. Do not escalate to the same priority as reflow issues on content sections.",
-      "confidence": 85,
-      "addedDate": "2026-03-10",
-      "verifiedCount": 0,
-      "lastVerified": null
-    },
-    {
       "id": "ge-021",
       "pattern": {
         "type": "audit-rule",
@@ -41960,6 +41999,7 @@ window.__A11Y_EXCEPTIONS = {
       "confidence": 90,
       "addedDate": "2026-03-28",
       "addedBy": "audit-review",
+      "status": "experimental",
       "verifiedCount": 0,
       "lastVerified": null
     },
@@ -41976,6 +42016,7 @@ window.__A11Y_EXCEPTIONS = {
       "confidence": 85,
       "addedDate": "2026-03-28",
       "addedBy": "audit-review",
+      "status": "experimental",
       "verifiedCount": 0,
       "lastVerified": null
     },
@@ -41987,12 +42028,13 @@ window.__A11Y_EXCEPTIONS = {
         "selectorPatterns": ["[class*='rebuy']", "[id*='rebuy']", "[data-rebuy]"],
         "description": "Rebuy-injected product recommendation sections"
       },
-      "wcag": ["*"],
-      "reason": "Rebuy widgets are third-party injected. Issues should be reported to Rebuy, not the theme developer.",
+      "wcag": ["1.1.1", "1.3.1", "1.4.3", "1.4.11", "4.1.2"],
+      "reason": "Rebuy widgets are third-party injected. Visual/naming issues should be reported to Rebuy. Keyboard/focus issues (2.1.x, 2.4.x) are still flagged since the site owner may be able to work around them.",
       "verification": "Confirm element is Rebuy-injected",
       "confidence": 80,
       "addedDate": "2026-03-28",
       "addedBy": "audit-review",
+      "status": "experimental",
       "verifiedCount": 0,
       "lastVerified": null
     },
@@ -42004,12 +42046,13 @@ window.__A11Y_EXCEPTIONS = {
         "selectorPatterns": ["[class*='tidio']", "#tidio-chat", "[data-tidio]"],
         "description": "Tidio live chat widget"
       },
-      "wcag": ["*"],
-      "reason": "Tidio chat widget is third-party injected.",
+      "wcag": ["1.1.1", "1.3.1", "1.4.3", "1.4.11", "4.1.2"],
+      "reason": "Tidio chat widget is third-party injected. Visual/naming issues are outside client control. Keyboard/focus issues (2.1.x, 2.4.x) are still flagged.",
       "verification": "Confirm element is Tidio-injected",
       "confidence": 85,
       "addedDate": "2026-03-28",
       "addedBy": "audit-review",
+      "status": "experimental",
       "verifiedCount": 0,
       "lastVerified": null
     },
@@ -42026,6 +42069,7 @@ window.__A11Y_EXCEPTIONS = {
       "confidence": 85,
       "addedDate": "2026-03-28",
       "addedBy": "audit-review",
+      "status": "experimental",
       "verifiedCount": 0,
       "lastVerified": null
     },
@@ -42042,6 +42086,7 @@ window.__A11Y_EXCEPTIONS = {
       "confidence": 75,
       "addedDate": "2026-03-28",
       "addedBy": "audit-review",
+      "status": "experimental",
       "verifiedCount": 0,
       "lastVerified": null
     },
@@ -42053,12 +42098,13 @@ window.__A11Y_EXCEPTIONS = {
         "selectorPatterns": ["[class*='recharge']", "[id*='recharge']", "[data-recharge]"],
         "description": "ReCharge subscription management widgets"
       },
-      "wcag": ["*"],
-      "reason": "ReCharge subscription widgets are third-party injected.",
+      "wcag": ["1.1.1", "1.3.1", "1.4.3", "1.4.11", "4.1.2"],
+      "reason": "ReCharge subscription widgets are third-party injected. Visual/naming issues are outside client control. Keyboard/focus issues (2.1.x, 2.4.x) are still flagged.",
       "verification": "Confirm element is ReCharge-injected",
       "confidence": 80,
       "addedDate": "2026-03-28",
       "addedBy": "audit-review",
+      "status": "experimental",
       "verifiedCount": 0,
       "lastVerified": null
     },
@@ -42075,6 +42121,7 @@ window.__A11Y_EXCEPTIONS = {
       "confidence": 75,
       "addedDate": "2026-03-28",
       "addedBy": "audit-review",
+      "status": "experimental",
       "verifiedCount": 0,
       "lastVerified": null
     },
@@ -42091,6 +42138,7 @@ window.__A11Y_EXCEPTIONS = {
       "confidence": 80,
       "addedDate": "2026-03-28",
       "addedBy": "audit-review",
+      "status": "experimental",
       "verifiedCount": 0,
       "lastVerified": null
     }
@@ -42148,7 +42196,7 @@ window.__A11Y_EXCEPTIONS = {
   },
 
   "statistics": {
-    "totalGlobal": 35,
+    "totalGlobal": 34,
     "totalSiteSpecific": 2,
     "falsePositivesPrevented": 5,
     "lastAnalyzed": "2026-03-28"

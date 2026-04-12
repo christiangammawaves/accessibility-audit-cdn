@@ -202,6 +202,40 @@ describe('safeSerialize', () => {
     expect(result.message).toBe('Test');
   });
 
+  it('preserves string values in element-reference keys', () => {
+    const obj = {
+      message: 'Test issue',
+      element: 'button.submit',
+      node: 'some-string-value',
+      selector: '#main-nav',
+    };
+    const result = safeSerialize(obj);
+    expect(result.element).toBe('button.submit');
+    expect(result.node).toBe('some-string-value');
+    expect(result.selector).toBe('#main-nav');
+    expect(result.message).toBe('Test issue');
+  });
+
+  it('still strips object values in element-reference keys', () => {
+    const obj = {
+      element: { tagName: 'DIV' },
+      node: { tagName: 'SPAN' },
+    };
+    const result = safeSerialize(obj);
+    expect(result.element).toBe('[Element]');
+    expect(result.node).toBe('[Element]');
+  });
+
+  it('preserves null and undefined values in element-reference keys', () => {
+    const obj = {
+      element: null,
+      node: undefined,
+    };
+    const result = safeSerialize(obj);
+    expect(result.element).toBeNull();
+    expect(result.node).toBeUndefined();
+  });
+
   it('serializes a Date object as an empty object (no enumerable own keys)', () => {
     const d = new Date('2026-01-15T00:00:00.000Z');
     // Date is an object; Object.keys(date) === [] → safeSerialize returns {}

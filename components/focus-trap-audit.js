@@ -79,6 +79,24 @@
 
   const helpers = global.a11yHelpers;
 
+  // Normalize issue fields to match the standard schema (message/fix/selector/criterion)
+  const WCAG_CRITERION_MAP = {
+    '2.1.2': 'No Keyboard Trap',
+    '2.4.3': 'Focus Order',
+    '2.4.7': 'Focus Visible',
+    '4.1.2': 'Name, Role, Value'
+  };
+
+  function normalizeIssue(raw) {
+    return {
+      ...raw,
+      message: raw.message || raw.issue,
+      fix: raw.fix || raw.recommendation,
+      selector: raw.selector || raw.element,
+      criterion: raw.criterion || WCAG_CRITERION_MAP[raw.wcag] || raw.wcag,
+    };
+  }
+
   function getFocusableElements(container) {
     // Delegate to shared-helpers if available
     if (helpers.getFocusableElements) return helpers.getFocusableElements(container);
@@ -633,7 +651,8 @@
     ];
 
     // Separate manual tests from automated findings
-    for (const issue of allIssues) {
+    for (const rawIssue of allIssues) {
+      const issue = normalizeIssue(rawIssue);
       if (issue.needsManualVerification) {
         results.manualTestsRequired.push(issue);
         results.summary.requiresManualVerification++;

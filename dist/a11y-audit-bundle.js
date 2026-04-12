@@ -1,5 +1,5 @@
 // a11y-audit-bundle.js — CDN bundle v13.2.0
-// Built: 2026-04-12T04:03:32Z
+// Built: 2026-04-12T19:57:35Z
 // Files: 71 (5 core + audit-bundle + 62 components + _audit-utils + orchestrator + exceptions)
 // https://cdn.jsdelivr.net/gh/christiangammawaves/accessibility-audit-cdn@v13.2.0/dist/a11y-audit-bundle.min.js
 
@@ -4904,7 +4904,12 @@
       const safe = {};
       for (const key of Object.keys(obj)) {
         if (key === 'element' || key === 'node' || key === 'domElement' || key === 'parentElement') {
-          safe[key] = obj[key] ? '[Element]' : null;
+          const val = obj[key];
+          if (val && typeof val === 'object') {
+            safe[key] = '[Element]';
+          } else {
+            safe[key] = safeSerialize(val, maxStringLength, maxArrayItems, seen);
+          }
           continue;
         }
         safe[key] = safeSerialize(obj[key], maxStringLength, maxArrayItems, seen);
@@ -4921,8 +4926,8 @@
    */
   function getResultsSafe(options = {}) {
     const results = getVerifiedResults();
-    const maxStringLength = options.maxStringLength ?? 500;
-    const maxArrayItems = options.maxIssues ?? options.maxArrayItems ?? 200;
+    const maxStringLength = options.maxStringLength ?? 2000;
+    const maxArrayItems = options.maxIssues ?? options.maxArrayItems ?? 500;
     return safeSerialize(results, maxStringLength, maxArrayItems);
   }
 
@@ -12555,6 +12560,7 @@ function runColorContrastAudit() {
           wcag: '1.4.3',
           criterion: 'Contrast (Minimum)',
           severity: 'moderate',
+          selector: selector,
           element: selector,
           text: getTextContent(element),
           textColor: colorToHex(textColor),
@@ -12582,6 +12588,7 @@ function runColorContrastAudit() {
           wcag: '1.4.3',
           criterion: 'Contrast (Minimum)',
           severity: 'minor',
+          selector: selector,
           element: selector,
           text: getTextContent(element),
           textColor: colorToHex(effectiveTextColor),
@@ -12607,6 +12614,7 @@ function runColorContrastAudit() {
           wcag: '1.4.3',
           criterion: 'Contrast (Minimum)',
           severity,
+          selector: selector,
           element: selector,
           text: getTextContent(element),
           textColor: colorToHex(effectiveTextColor),
@@ -12669,6 +12677,7 @@ function runColorContrastAudit() {
           criterion: 'Contrast (Enhanced)',
           level: 'AAA',
           severity: 'moderate',
+          selector: selector,
           element: selector,
           text: getTextContent(element),
           textColor: colorToHex(textColor),
@@ -12698,6 +12707,7 @@ function runColorContrastAudit() {
           criterion: 'Contrast (Enhanced)',
           level: 'AAA',
           severity,
+          selector: selector,
           element: selector,
           text: getTextContent(element),
           textColor: colorToHex(effectiveTextColor),
@@ -12755,6 +12765,7 @@ function runColorContrastAudit() {
             criterion: 'Non-text Contrast',
             level: 'AA',
             severity: borderRatio < 2 ? 'serious' : 'moderate',
+            selector: selector,
             element: selector,
             componentType: element.tagName.toLowerCase(),
             borderColor: colorToHex(effectiveBorder),
@@ -12783,6 +12794,7 @@ function runColorContrastAudit() {
               criterion: 'Non-text Contrast',
               level: 'AA',
               severity: bgRatio < 2 ? 'serious' : 'moderate',
+              selector: selector,
               element: selector,
               componentType: element.tagName.toLowerCase(),
               componentBackground: colorToHex(effectiveBg),
@@ -12809,6 +12821,7 @@ function runColorContrastAudit() {
             criterion: 'Non-text Contrast',
             level: 'AA',
             severity: 'serious',
+            selector: selector,
             element: selector,
             componentType: element.tagName.toLowerCase(),
             focusColor: colorToHex(effectiveFocus),
@@ -16121,6 +16134,24 @@ if (typeof window !== 'undefined') {
 
   const helpers = global.a11yHelpers;
 
+  // Normalize issue fields to match the standard schema (message/fix/selector/criterion)
+  const WCAG_CRITERION_MAP = {
+    '2.1.2': 'No Keyboard Trap',
+    '2.4.3': 'Focus Order',
+    '2.4.7': 'Focus Visible',
+    '4.1.2': 'Name, Role, Value'
+  };
+
+  function normalizeIssue(raw) {
+    return {
+      ...raw,
+      message: raw.message || raw.issue,
+      fix: raw.fix || raw.recommendation,
+      selector: raw.selector || raw.element,
+      criterion: raw.criterion || WCAG_CRITERION_MAP[raw.wcag] || raw.wcag,
+    };
+  }
+
   function getFocusableElements(container) {
     // Delegate to shared-helpers if available
     if (helpers.getFocusableElements) return helpers.getFocusableElements(container);
@@ -16675,7 +16706,8 @@ if (typeof window !== 'undefined') {
     ];
 
     // Separate manual tests from automated findings
-    for (const issue of allIssues) {
+    for (const rawIssue of allIssues) {
+      const issue = normalizeIssue(rawIssue);
       if (issue.needsManualVerification) {
         results.manualTestsRequired.push(issue);
         results.summary.requiresManualVerification++;
@@ -21769,9 +21801,9 @@ if (typeof window !== 'undefined') {
       }
       
       // H1 fix: Delegate to shared-helpers instead of duplicating color utilities
-      const getContrastRatio = h.getContrastRatio || function(c1, c2) { return 1; };
-      const parseColor = h.parseColor || function(s) { return null; };
-      const getBackgroundColor = h.getBackgroundColor || function() { return { r: 255, g: 255, b: 255 }; };
+      const getContrastRatio = window.a11yHelpers.getContrastRatio || function(c1, c2) { return 1; };
+      const parseColor = window.a11yHelpers.parseColor || function(s) { return null; };
+      const getBackgroundColor = window.a11yHelpers.getBackgroundColor || function() { return { r: 255, g: 255, b: 255 }; };
       
       // Check for :focus-visible support in stylesheets
       try {

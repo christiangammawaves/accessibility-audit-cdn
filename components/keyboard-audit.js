@@ -449,9 +449,9 @@
       }
       
       // H1 fix: Delegate to shared-helpers instead of duplicating color utilities
-      const getContrastRatio = h.getContrastRatio || function(c1, c2) { return 1; };
-      const parseColor = h.parseColor || function(s) { return null; };
-      const getBackgroundColor = h.getBackgroundColor || function() { return { r: 255, g: 255, b: 255 }; };
+      const getContrastRatio = window.a11yHelpers.getContrastRatio || function(c1, c2) { return 1; };
+      const parseColor = window.a11yHelpers.parseColor || function(s) { return null; };
+      const getBackgroundColor = window.a11yHelpers.getBackgroundColor || function() { return { r: 255, g: 255, b: 255 }; };
       
       // Check for :focus-visible support in stylesheets
       try {

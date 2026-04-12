@@ -1017,7 +1017,12 @@
       const safe = {};
       for (const key of Object.keys(obj)) {
         if (key === 'element' || key === 'node' || key === 'domElement' || key === 'parentElement') {
-          safe[key] = obj[key] ? '[Element]' : null;
+          const val = obj[key];
+          if (val && typeof val === 'object') {
+            safe[key] = '[Element]';
+          } else {
+            safe[key] = safeSerialize(val, maxStringLength, maxArrayItems, seen);
+          }
           continue;
         }
         safe[key] = safeSerialize(obj[key], maxStringLength, maxArrayItems, seen);
@@ -1034,8 +1039,8 @@
    */
   function getResultsSafe(options = {}) {
     const results = getVerifiedResults();
-    const maxStringLength = options.maxStringLength ?? 500;
-    const maxArrayItems = options.maxIssues ?? options.maxArrayItems ?? 200;
+    const maxStringLength = options.maxStringLength ?? 2000;
+    const maxArrayItems = options.maxIssues ?? options.maxArrayItems ?? 500;
     return safeSerialize(results, maxStringLength, maxArrayItems);
   }
 

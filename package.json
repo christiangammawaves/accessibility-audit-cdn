@@ -1,6 +1,6 @@
 {
   "name": "accessibility-audit-cdn",
-  "version": "13.2.0",
+  "version": "13.3.0",
   "private": true,
   "description": "WCAG 2.2 Level AA accessibility auditing system",
   "scripts": {

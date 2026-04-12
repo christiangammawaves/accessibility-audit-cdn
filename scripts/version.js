@@ -6,36 +6,32 @@
  * Inject this FIRST before any other audit scripts.
  * 
  * @module version
- * @version 13.2.0
+ * @version 13.3.0
  */
 
 (function(global) {
   'use strict';
 
   const VERSION_INFO = {
-    version: '13.2.0',
+    version: '13.3.0',
     releaseDate: '2026-04-12',
 
     // Changelog for current version
     changes: [
+      'FIX: Resolve ReferenceError in keyboard-audit.js — undefined variable `h` replaced with window.a11yHelpers',
+      'FIX: Normalize focus-trap-audit.js output fields to standard schema (message/fix/selector/criterion)',
+      'FIX: Add missing selector field to all 8 color-contrast.js finding types',
+      'FIX: safeSerialize now preserves string values in element-reference keys (only strips DOM objects)',
+      'FIX: Increase getResultsSafe maxStringLength 500→2000 and maxArrayItems 200→500',
+    ],
+
+    // Previous version changes (13.2.0)
+    previousChanges: [
       'DOC: Remove Quick audit tier — Standard is now the minimum for all audits',
       'DOC: Add Phase 2 completion gate — all layers (A-D) must produce results before proceeding',
       'DOC: Strengthen Phase 3 — mandatory remediation rewrite with file:line specifics for all findings',
-      'DOC: Add Phase 3 Part B — source-unavailable fallback path moved into Phase 3',
-      'DOC: Phase 4 (Interaction Testing) and Phase 5 (Visual Verification) now required for all audits',
-      'DOC: Add Phase 5.75 Step e — remediation quality validation gate',
-      'DOC: Add Common Failure Modes section to prevent anti-patterns',
-      'DOC: Remove redundant Verified Working Approach section (covered by enforced Phase 2)',
       'FIX: Remove forms from SOURCE_REPLACEABLE_MODULES — too complex for source-only review',
       'FIX: Scope ge-005 exception to specific WCAG criteria instead of wildcard',
-    ],
-
-    // Previous version changes (13.1.0)
-    previousChanges: [
-      'DOC: Add Phase 2.5 — Independent Code Review for source-available audits',
-      'DOC: Add Phase 5.75 — Post-Audit Enrichment (mandatory) for element_html, layer, confidence, component_type',
-      'DOC: Define Audit Depth Tiers (Quick/Standard/Full) with mandatory minimums',
-      'DOC: Update Dashboard Integration with real Edge Function endpoint and enriched payload mapping',
     ],
 
     // Core script versions (all synced to main version via A11Y_VERSION)

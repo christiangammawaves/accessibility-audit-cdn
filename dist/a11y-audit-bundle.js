@@ -1,5 +1,5 @@
 // a11y-audit-bundle.js — CDN bundle v13.2.0
-// Built: 2026-04-12T02:44:49Z
+// Built: 2026-04-12T02:47:24Z
 // Files: 71 (5 core + audit-bundle + 62 components + _audit-utils + orchestrator + exceptions)
 // https://cdn.jsdelivr.net/gh/{org}/accessibility-audit-unified@v13.2.0/dist/a11y-audit-bundle.min.js
 

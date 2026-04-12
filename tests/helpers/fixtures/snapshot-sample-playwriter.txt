@@ -1,0 +1,17 @@
+- banner:
+  - navigation "Main Menu":
+    - link "Home" [id="nav-home"]
+    - link "" [id="nav-empty"]
+    - link "Products" [data-testid="nav-products"]
+  - button "Menu" role=button[name="Menu"]
+- main "Main Content":
+  - heading "Welcome to Our Store" [level=1]
+  - heading "" [level=2]
+  - img "Product photo"
+  - img ""
+  - link "Shop Now" [id="shop-link"]
+    - img ""
+  - textbox "" [id="search-input"]
+  - button "" [id="submit-btn"]
+  - generic [cursor=pointer]
+- contentinfo:

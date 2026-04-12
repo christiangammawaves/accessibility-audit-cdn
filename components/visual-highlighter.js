@@ -814,7 +814,7 @@
       return truncate(filename, 50);
     }
     // 5. id
-    if (element.id) return `#${element.id}`;
+    if (element.id) return `#${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(element.id) : element.id}`;
     // 6. class-based selector
     if (element.className && typeof element.className === 'string') {
       return `${element.tagName.toLowerCase()}.${element.className.split(' ')[0]}`;

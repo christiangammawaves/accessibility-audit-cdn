@@ -38,6 +38,20 @@
   const QUERY_CACHE_TTL = 10000;  // Extended: DOM doesn't change during a single audit run
   const QUERY_CACHE_MAX_SIZE = 1000;
 
+  // Unique container ID assignment for cache keys (avoids collision when
+  // multiple containers share the same tagName and have no id attribute).
+  let containerIdCounter = 0;
+  const containerIdMap = new WeakMap();
+  function getContainerId(container) {
+    if (container === document) return 'doc';
+    let id = containerIdMap.get(container);
+    if (id === undefined) {
+      id = 'c' + (containerIdCounter++);
+      containerIdMap.set(container, id);
+    }
+    return id;
+  }
+
   const VISIBILITY_CACHE_TTL = 10000;  // Extended: matches query cache TTL for audit-duration stability
   const VISIBILITY_CACHE_MAX_SIZE = 2000;
   const ARIA_CACHE_MAX_SIZE = 1000;
@@ -204,7 +218,7 @@
     container = container || document;
 
     // Create cache key from selector + container identity
-    const containerKey = container === document ? 'doc' : (container.id || container.tagName);
+    const containerKey = getContainerId(container);
     const cacheKey = selector + '|' + containerKey;
 
     const cached = queryCache.get(cacheKey);

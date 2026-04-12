@@ -26,8 +26,8 @@ describe('Parallel execution — orchestrator configuration', () => {
     }
   });
 
-  it('FORCE_SEQUENTIAL is set to false (parallel enabled)', () => {
-    expect(orchestratorSource).toContain('const FORCE_SEQUENTIAL = false;');
+  it('FORCE_SEQUENTIAL is set to true (parallel disabled due to checkpoint race conditions)', () => {
+    expect(orchestratorSource).toContain('const FORCE_SEQUENTIAL = true;');
   });
 
   it('phases 1-6 are marked parallel: true', () => {

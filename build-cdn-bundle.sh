@@ -67,7 +67,7 @@ mkdir -p dist
   echo "// a11y-audit-bundle.js — CDN bundle v${VERSION}"
   echo "// Built: ${BUILD_DATE}"
   echo "// Files: ${TOTAL_FILES} (5 core + audit-bundle + ${#COMPONENT_FILES[@]} components + _audit-utils + orchestrator + exceptions)"
-  echo "// https://cdn.jsdelivr.net/gh/{org}/accessibility-audit-unified@v${VERSION}/dist/a11y-audit-bundle.min.js"
+  echo "// https://cdn.jsdelivr.net/gh/christiangammawaves/accessibility-audit-cdn@v${VERSION}/dist/a11y-audit-bundle.min.js"
   echo ""
 
   # 1-5: Core scripts (order matters)

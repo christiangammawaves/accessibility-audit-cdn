@@ -7,7 +7,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "build:bundle": "bash build-bundle.sh"
+    "build:bundle": "bash build-cdn-bundle.sh"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^3.0.0",

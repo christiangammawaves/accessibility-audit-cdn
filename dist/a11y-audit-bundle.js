@@ -1,5 +1,5 @@
 // a11y-audit-bundle.js — CDN bundle v13.2.0
-// Built: 2026-04-12T03:27:24Z
+// Built: 2026-04-12T04:03:32Z
 // Files: 71 (5 core + audit-bundle + 62 components + _audit-utils + orchestrator + exceptions)
 // https://cdn.jsdelivr.net/gh/christiangammawaves/accessibility-audit-cdn@v13.2.0/dist/a11y-audit-bundle.min.js
 
@@ -4082,10 +4082,10 @@
     
     if (!config.exceptions) {
       log('ERROR: No exceptions provided.', 'error');
-      log('Load learned-exceptions.json and pass via initAudit({ exceptions: ... })', 'error');
+      log('Pass window.__A11Y_EXCEPTIONS via initAudit({ exceptions: window.__A11Y_EXCEPTIONS })', 'error');
       throw new Error(
-        'Exceptions required. Load learned-exceptions.json and pass to initAudit({ exceptions: exceptionsJSON }). ' +
-        'File location: /mnt/skills/user/accessibility-audit-unified/learned-exceptions.json'
+        'Exceptions required. Pass window.__A11Y_EXCEPTIONS to initAudit({ exceptions: window.__A11Y_EXCEPTIONS }). ' +
+        'Exceptions are embedded in the CDN bundle automatically.'
       );
     }
     

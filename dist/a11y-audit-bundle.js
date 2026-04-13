@@ -1,7 +1,7 @@
-// a11y-audit-bundle.js — CDN bundle v13.3.0
-// Built: 2026-04-12T20:03:57Z
+// a11y-audit-bundle.js — CDN bundle v13.3.1
+// Built: 2026-04-12T22:03:14Z
 // Files: 71 (5 core + audit-bundle + 62 components + _audit-utils + orchestrator + exceptions)
-// https://cdn.jsdelivr.net/gh/christiangammawaves/accessibility-audit-cdn@v13.3.0/dist/a11y-audit-bundle.min.js
+// https://cdn.jsdelivr.net/gh/christiangammawaves/accessibility-audit-cdn@v13.3.1/dist/a11y-audit-bundle.min.js
 
 // --- version.js ---
 /**
@@ -12,32 +12,28 @@
  * Inject this FIRST before any other audit scripts.
  * 
  * @module version
- * @version 13.3.0
+ * @version 13.3.1
  */
 
 (function(global) {
   'use strict';
 
   const VERSION_INFO = {
-    version: '13.3.0',
+    version: '13.3.1',
     releaseDate: '2026-04-12',
 
     // Changelog for current version
     changes: [
+      'FIX: Escape numeric/special-char IDs with CSS.escape() in getSelector — fixes querySelector crash on Shopify-generated IDs',
+    ],
+
+    // Previous version changes (13.3.0)
+    previousChanges: [
       'FIX: Resolve ReferenceError in keyboard-audit.js — undefined variable `h` replaced with window.a11yHelpers',
       'FIX: Normalize focus-trap-audit.js output fields to standard schema (message/fix/selector/criterion)',
       'FIX: Add missing selector field to all 8 color-contrast.js finding types',
       'FIX: safeSerialize now preserves string values in element-reference keys (only strips DOM objects)',
       'FIX: Increase getResultsSafe maxStringLength 500→2000 and maxArrayItems 200→500',
-    ],
-
-    // Previous version changes (13.2.0)
-    previousChanges: [
-      'DOC: Remove Quick audit tier — Standard is now the minimum for all audits',
-      'DOC: Add Phase 2 completion gate — all layers (A-D) must produce results before proceeding',
-      'DOC: Strengthen Phase 3 — mandatory remediation rewrite with file:line specifics for all findings',
-      'FIX: Remove forms from SOURCE_REPLACEABLE_MODULES — too complex for source-only review',
-      'FIX: Scope ge-005 exception to specific WCAG criteria instead of wildcard',
     ],
 
     // Core script versions (all synced to main version via A11Y_VERSION)
@@ -850,8 +846,8 @@
   function getSelector(element, maxLen) {
     maxLen = maxLen || 150;
     if (!element) return 'unknown';
-    if (element.id) return '#' + element.id;
-    
+    if (element.id) return '#' + (typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(element.id) : element.id);
+
     let selector = element.tagName.toLowerCase();
     
     if (element.className && typeof element.className === 'string') {
@@ -881,7 +877,7 @@
     while (current && current !== document.body && depth < maxDepth) {
       let part = current.tagName.toLowerCase();
       if (current.id) {
-        parts.unshift('#' + current.id);
+        parts.unshift('#' + (typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(current.id) : current.id));
         break;
       }
       if (current.className && typeof current.className === 'string') {
@@ -37539,7 +37535,7 @@ if (typeof window !== 'undefined') {
       return truncate(filename, 50);
     }
     // 5. id
-    if (element.id) return `#${element.id}`;
+    if (element.id) return `#${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(element.id) : element.id}`;
     // 6. class-based selector
     if (element.className && typeof element.className === 'string') {
       return `${element.tagName.toLowerCase()}.${element.className.split(' ')[0]}`;

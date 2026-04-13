@@ -766,8 +766,8 @@
   function getSelector(element, maxLen) {
     maxLen = maxLen || 150;
     if (!element) return 'unknown';
-    if (element.id) return '#' + element.id;
-    
+    if (element.id) return '#' + (typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(element.id) : element.id);
+
     let selector = element.tagName.toLowerCase();
     
     if (element.className && typeof element.className === 'string') {
@@ -797,7 +797,7 @@
     while (current && current !== document.body && depth < maxDepth) {
       let part = current.tagName.toLowerCase();
       if (current.id) {
-        parts.unshift('#' + current.id);
+        parts.unshift('#' + (typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(current.id) : current.id));
         break;
       }
       if (current.className && typeof current.className === 'string') {
